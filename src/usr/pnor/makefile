@@ -30,7 +30,8 @@ MODULE = pnor
 OBJS += pnor_utils.o
 OBJS += pnorrp.o
 OBJS += $(if $(CONFIG_SECUREBOOT),spnorrp.o)
-OBJS += pnordd.o
+//OBJS += pnordd.o
+OBJS += ast_mboxdd.o
 OBJS += pnor_common.o
 OBJS += pnorvalid.o
 OBJS += ecc.o
@@ -51,3 +52,4 @@ SUBDIRS += test.d
 SUBDIRS += runtime.d
 
 include ${ROOTPATH}/config.mk
+
