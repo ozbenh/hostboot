@@ -45,6 +45,7 @@
 #include <errl/errludlogregister.H>
 #include <errl/errludstring.H>
 #include <targeting/common/targetservice.H>
+#include <sio/sio.H>
 #include "ast_mboxdd.H"
 #include "pnor_common.H"
 #include <pnor/pnorif.H>
@@ -296,16 +297,23 @@ static uint8_t g_mboxMsgSeq;
 
 errlHndl_t PnorDD::doMessage(struct mboxMessage &msg)
 {
-	uint8_t *data = reinterpret_cast <uint8_t *>(&msg);
+	uint8_t *data = reinterpret_cast <uint8_t *>((char *)&msg);
 	errlHndl_t l_err = NULL;
+	uint8_t status;
 	int i;
 
 	/* XXX Add mutex */
 
-	TRACDCOMP( g_trac_pnor, ENTER_MRK"astMboxDD::doMessage(0x%02x)", msg.cmd );
+	TRACFCOMP( g_trac_pnor, ENTER_MRK"astMboxDD::doMessage(0x%02x)", msg.cmd );
 	msg.seq = g_mboxMsgSeq++;
 
 	do {
+		/* Clear status */
+		mboxOut(MBOX_HOST_CTRL, MBOX_CTRL_INT_STATUS);
+
+		l_err = mboxIn(MBOX_HOST_CTRL, status);
+		TRACFCOMP( g_trac_pnor, "Initial status=%02x...", status);
+
 		/* Write message out */
 		for (i = 0; i < BMC_MBOX_DATA_REGS && !l_err; i++)
 			l_err = mboxOut(i, data[i]);
@@ -317,10 +325,10 @@ errlHndl_t PnorDD::doMessage(struct mboxMessage &msg)
 		if (l_err)
 			break;
 
+		TRACFCOMP( g_trac_pnor, "Sending cmd...");
+
 		/* Wait for response */
 		do {
-			uint8_t status;
-
 			l_err = mboxIn(MBOX_HOST_CTRL, status);
 			if (l_err)
 				break;
@@ -329,29 +337,32 @@ errlHndl_t PnorDD::doMessage(struct mboxMessage &msg)
 			/* XXX Add timeout */
 			/* XXX Add attentions from BMC */
 			nanosleep(0, 1000);
-		} while(0);
+		} while(1);
 
 		if (l_err)
 			break;
+
+		/* Clear status */
+		mboxOut(MBOX_HOST_CTRL, MBOX_CTRL_INT_STATUS);
 
 		/* Check sequence number */
-		uint8_t seq;
-		l_err = mboxIn(1, seq);
+		uint8_t old_seq = msg.seq;
+		for (i = 0; i < BMC_MBOX_DATA_REGS && !l_err; i++)
+			l_err = mboxIn(i, data[i]);
 		if (l_err)
 			break;
-		if (seq != msg.seq) {
+		TRACFCOMP( g_trac_pnor, "Message: cmd:%02x seq:%02x a:%02x %02x %02x %02x %02x..resp:%02x\n",
+				   msg.cmd, msg.seq, msg.args[0], msg.args[1], msg.args[2], msg.args[3],
+				   msg.args[4], msg.resp);
+		if (old_seq != msg.seq) {
 			TRACFCOMP( g_trac_pnor, "bad sequence number in mbox message, got %d want %d",
-					   seq, msg.seq);
+					   msg.seq, old_seq);
 			// XXX Do something about it
 		}
 		if (msg.resp != MBOX_R_SUCCESS) {
 			TRACFCOMP( g_trac_pnor, "BMC mbox command failed with err %d", msg.resp);
 			// XXX Do something about it
 		}
-
-		/* Read message */
-		for (i = 0; i < BMC_MBOX_DATA_REGS && !l_err; i++)
-			l_err = mboxIn(i, data[i]);
 
 	} while(0);
 
@@ -514,6 +525,12 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 	iv_readWindow.open = false;
 	iv_writeWindow.open = false;
     do {
+		l_err = initializeMBOX();
+		if (l_err) {
+			TRACFCOMP( g_trac_pnor, "MBOX initialization failed :: RC=%.4X", ERRL_GETRC_SAFE(l_err) );
+			break;
+		}
+
 		mboxMessage mbInfoMsg(MBOX_C_GET_MBOX_INFO);
 		mbInfoMsg.put8(0, 1);
 		l_err = doMessage(mbInfoMsg);
@@ -525,7 +542,7 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 		iv_readWindow.size = mbInfoMsg.get16(1) << iv_blockShift;
 		iv_writeWindow.size = mbInfoMsg.get16(3) << iv_blockShift;
 		TRACFCOMP( g_trac_pnor, "mboxPnor: blockShift=%d, rdWinSize=0x%08x, wrWinSize=0x%08x",
-				   ERRL_GETRC_SAFE(l_err), iv_blockShift, iv_readWindow.size, iv_writeWindow.size);
+				   iv_blockShift, iv_readWindow.size, iv_writeWindow.size);
 
 		mboxMessage flInfoMsg(MBOX_C_GET_FLASH_INFO);
 		l_err = doMessage(flInfoMsg);
@@ -625,4 +642,66 @@ uint32_t PnorDD::getNorWorkarounds( void )
 uint32_t PnorDD::getNorSize( void )
 {
 	return iv_flashSize;
+}
+
+errlHndl_t PnorDD::initializeMBOX(void)
+{
+	errlHndl_t l_errl = NULL;
+	uint8_t l_data;
+	size_t l_len = sizeof(uint8_t);
+
+	TRACFCOMP(g_trac_pnor, ENTER_MRK"PnorDD::initializeMBOX()");
+	do {
+		l_data = SIO::DISABLE_DEVICE;
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x30));
+		if (l_errl) { break; }
+
+		// Set SUART1 addr to g_uartBase
+		l_data = (MBOX_IO_BASE >> 8) & 0xFF;
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x60));
+		if (l_errl) { break; }
+
+		l_data = MBOX_IO_BASE & 0xFF;
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x61));
+		if (l_errl) { break; }
+
+		l_data = MBOX_LPC_IRQ;
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x70));
+		if (l_errl) { break; }
+
+		l_data = 1; /* Low level trigger */
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x71));
+		if (l_errl) { break; }
+
+		l_data = SIO::ENABLE_DEVICE;
+		l_errl = deviceOp( DeviceFW::WRITE,
+						   TARGETING::MASTER_PROCESSOR_CHIP_TARGET_SENTINEL,
+						   &(l_data),
+						   l_len,
+						   DEVICE_SIO_ADDRESS(SIO::MB, 0x30));
+		if (l_errl) { break; }
+
+	} while(0);
+
+	return l_errl;
 }

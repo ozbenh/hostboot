@@ -44,7 +44,8 @@
 #include "ffs.h"
 #include "common/ffs_hb.H"
 #include "pnorrp.H"
-#include "pnordd.H"
+//#include "pnordd.H"
+#include "ast_mboxdd.H"
 #include <pnor/pnorif.H>
 #include <pnor/pnor_reasoncodes.H>
 #include <lpc/lpcif.H>

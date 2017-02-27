@@ -29,7 +29,6 @@
 #include <limits.h>
 #include <config.h>
 namespace PNOR { class UdPnorDDParms; }
-class SfcDD;
 
 /** @file pnordd.H
  *  @brief Provides the interfaces to the PNOR Device Driver
@@ -192,9 +191,11 @@ class PnorDD
 #define BMC_COMPLETE 2
 
 #define MBOX_IO_BASE 0x1000
+#define MBOX_LPC_IRQ	9
 
 	errlHndl_t mboxOut(uint64_t i_addr, uint8_t i_byte);
 	errlHndl_t mboxIn(uint64_t i_addr, uint8_t& o_byte);
+	errlHndl_t initializeMBOX(void);
 
 	class mboxMessage {
 	public:
