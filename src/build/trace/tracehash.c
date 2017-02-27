@@ -665,7 +665,7 @@ char* create_format_string(const char* string)
     size_t r_pos = 0; // Current position in result string.
 
     // Iterate through source string looking for format tags.
-    for(size_t pos = 0; pos < length; pos++)
+    for(size_t pos = 0; pos < (length-2); pos++)
     {
         // Skip if not %.
         if (string[pos] != '%') continue;
