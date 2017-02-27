@@ -5,7 +5,7 @@
 /*                                                                        */
 /* OpenPOWER HostBoot Project                                             */
 /*                                                                        */
-/* Contributors Listed Below - COPYRIGHT 2015,2016                        */
+/* Contributors Listed Below - COPYRIGHT 2015,2017                        */
 /* [+] International Business Machines Corp.                              */
 /*                                                                        */
 /*                                                                        */
@@ -30,6 +30,7 @@
 #include <diag/attn/attn.H>
 #include <diag/mdia/mdia.H>
 #include <targeting/common/targetservice.H>
+#include <devicefw/driverif.H>
 
 using   namespace   ISTEP;
 using   namespace   ISTEP_ERROR;
@@ -99,6 +100,46 @@ void* call_mss_memdiag (void* io_pArgs)
             TRACFCOMP(ISTEPS_TRACE::g_trac_isteps_trace,
                       "ATTN stopService failed");
             break;
+        }
+
+        //Mask IPOLL Interrupts
+        TRACFCOMP(ISTEPS_TRACE::g_trac_isteps_trace,
+                  "Mask IPOLL Interrupts");
+
+        // Get all functional proc chip targets
+        //Use targeting code to get a list of all processors
+        TARGETING::TargetHandleList l_procChips;
+        getAllChips( l_procChips, TARGETING::TYPE_PROC   );
+
+        for (auto l_procChip: l_procChips)
+        {
+            uint64_t l_data = 0xfff0000000000000;
+            size_t l_data_sz = sizeof(uint64_t);
+
+            l_errl = deviceWrite( l_procChip, &l_data, l_data_sz,
+                  DEVICE_SCOM_ADDRESS(0x000F0033) );
+
+            if( NULL != l_errl )
+            {
+                TRACFCOMP(ISTEPS_TRACE::g_trac_isteps_trace,
+                   "IPOLL MASK ERROR: deviceWrite on 0x%08X failed HUID:0x%08X",
+                   0x000F0033, get_huid(l_procChip));
+                break;
+            }
+
+            //Disable the nest pulse to the bottom 4 bits of the TB
+            l_data = 0x0000000000000000;
+
+            l_errl = deviceWrite( l_procChip, &l_data, l_data_sz,
+                  DEVICE_SCOM_ADDRESS(0x010F0023) );
+
+            if( NULL != l_errl )
+            {
+                TRACFCOMP(ISTEPS_TRACE::g_trac_isteps_trace,
+                   "Disable nest pulse: deviceWrite on 0x%08X failed HUID:0x%08X",
+                   0x010F0023, get_huid(l_procChip));
+                break;
+            }
         }
 
     }while( 0 );

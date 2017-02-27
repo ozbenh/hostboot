@@ -241,8 +241,8 @@ void*    call_mss_eff_config( void *io_pArgs )
         }
         // Call the mss_eff_config_thermal HWP
         TRACFCOMP( ISTEPS_TRACE::g_trac_isteps_trace,
-                   "p9_mss_eff_config_thermal HWP. ");
-        FAPI_INVOKE_HWP(l_err, p9_mss_eff_config_thermal,l_fapi_mcs_targs);
+                   "Temporarily skipping p9_mss_eff_config_thermal HWP. ");
+        //FAPI_INVOKE_HWP(l_err, p9_mss_eff_config_thermal,l_fapi_mcs_targs);
 
         if (l_err)
         {

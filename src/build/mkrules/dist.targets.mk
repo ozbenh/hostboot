@@ -71,7 +71,7 @@ COPY_FILES = \
     obj/genfiles/targAttrInfo.csv:vpo \
     obj/genfiles/target_types_merged.xml:openpower \
     obj/genfiles/fapiattrs.xml:openpower \
-    obj/genfiles/attributeOverride:tools,openpower \
+    obj/genfiles/attributeOverride:tools \
     src/usr/targeting/attroverride/README.attr_override:tools,openpower \
     src/build/hwpf/prcd_compile.tcl:tools \
     src/build/buildpnor/buildSbePart.pl:openpower \
