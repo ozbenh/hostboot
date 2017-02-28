@@ -227,15 +227,9 @@ astMbox::astMbox( TARGETING::Target* i_target )
     TRACFCOMP(g_trac_pnor, ENTER_MRK "astMbox::astMbox()" );
     errlHndl_t l_err = NULL;
 
-	l_err = initializeMBOX();
+	l_err = initializeMbox();
 	if (l_err)
 	{
-		TRACFCOMP( g_trac_pnor, "MBOX initialization failed :: RC=%.4X", ERRL_GETRC_SAFE(l_err) );
-		break;
-	}
-
-    if (l_err)
-    {
         TRACFCOMP( g_trac_pnor, "Failure to initialize the MBOX logic, shutting down :: RC=%.4X", ERRL_GETRC_SAFE(l_err) );
         l_err->collectTrace(PNOR_COMP_NAME); /* XX change comp name/ID ? */
         ERRORLOG::errlCommit(l_err,PNOR_COMP_ID);

@@ -1,7 +1,7 @@
 /* IBM_PROLOG_BEGIN_TAG                                                   */
 /* This is an automatically generated prolog.                             */
 /*                                                                        */
-/* $Source: src/usr/pnor/pnordd.H $                                       */
+/* $Source: src/usr/pnor/pnor_mboxdd.H $                                  */
 /*                                                                        */
 /* OpenPOWER HostBoot Project                                             */
 /*                                                                        */
@@ -29,6 +29,8 @@
 #include <limits.h>
 #include <config.h>
 namespace PNOR { class UdPnorDDParms; }
+
+class astMbox;
 
 /** @file pnor_mboxdd.H
  *  @brief Provides the interfaces to the PNOR via the
@@ -121,8 +123,7 @@ class PnorDD
   protected:
 
     /**
-     * @brief Call SFC to write data to the PNOR flash, doing retries
-     *        as needed
+     * @brief Write data to PNOR using Mbox LPC windows
      * @pre Mutex should already be locked before calling
      *
      * @parm[in] i_addr  PNOR flash Address to write
@@ -136,8 +137,7 @@ class PnorDD
                             const void* i_data );
 
     /**
-     * @brief Call SFC to read data from the PNOR flash, doing retries
-     *        as needed
+     * @brief Read data from PNOR using Mbox LPC windows
      * @pre Mutex should already be locked before calling
      *
      * @parm[in] i_addr  PNOR flash Address to read
@@ -161,8 +161,12 @@ class PnorDD
 	errlHndl_t adjustMboxWindow(lpcWindow &i_win, uint8_t i_cmd,
 								uint32_t i_reqAddr, size_t i_reqSize,
 								uint32_t &o_lpcAddr, size_t &o_chunkLen);
+	errlHndl_t writeFlush(uint32_t i_addr, size_t i_size);
 
-  private: // Variables
+	errlHndl_t readLpcFw(uint32_t i_offset, uint32_t i_size, void *o_buf);
+	errlHndl_t writeLpcFw(uint32_t i_offset, uint32_t i_size, const void *i_buf);
+
+private: // Variables
 
 	astMbox *iv_mbox;
 	uint32_t iv_blockShift;

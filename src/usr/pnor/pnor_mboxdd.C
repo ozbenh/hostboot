@@ -334,8 +334,8 @@ errlHndl_t PnorDD::adjustMboxWindow(lpcWindow &i_win, uint8_t i_cmd,
     errlHndl_t l_err = NULL;
 	uint32_t l_pos;
 
-	assert(i_cmd == MBOX_C_CREATE_READ_WINDOW ||
-		   i_cmd == MBOX_C_CREATE_WRITE_WINDOW);
+	assert(i_cmd == astMbox::MBOX_C_CREATE_READ_WINDOW ||
+		   i_cmd == astMbox::MBOX_C_CREATE_WRITE_WINDOW);
 
 	do {
 		/*
@@ -362,7 +362,7 @@ errlHndl_t PnorDD::adjustMboxWindow(lpcWindow &i_win, uint8_t i_cmd,
 		l_pos = i_reqAddr & ~(i_win.size - 1);
 
 		TRACFCOMP(g_trac_pnor, "astMboxDD::adjustMboxWindow opening %s window at 0x%08x for addr 0x%08x\n",
-				  i_cmd == MBOX_C_CREATE_READ_WINDOW ? "read" : "write", l_pos, i_reqAddr);
+				  i_cmd == astMbox::MBOX_C_CREATE_READ_WINDOW ? "read" : "write", l_pos, i_reqAddr);
 
 		astMbox::mboxMessage winMsg(i_cmd);
 		winMsg.put16(0, l_pos >> iv_blockShift);
@@ -376,6 +376,102 @@ errlHndl_t PnorDD::adjustMboxWindow(lpcWindow &i_win, uint8_t i_cmd,
 	} while (true);
 
 	return l_err;
+}
+
+errlHndl_t PnorDD::writeFlush(uint32_t i_addr, size_t i_size)
+{
+	astMbox::mboxMessage flushMsg(astMbox::MBOX_C_WRITE_FLUSH);
+
+    flushMsg.put16(0, i_addr >> iv_blockShift);
+    flushMsg.put32(2, i_size);
+	return iv_mbox->doMessage(flushMsg);
+}
+
+/**
+ * @brief Write data to PNOR using Mbox LPC windows
+ */
+errlHndl_t PnorDD::_writeFlash( uint32_t i_addr,
+                                size_t i_size,
+                                const void* i_data )
+{
+    TRACDCOMP(g_trac_pnor, ENTER_MRK"PnorDD::_writeFlash(i_addr=0x%.8X)> ", i_addr);
+    errlHndl_t l_err = NULL;
+
+ 	while (i_size) {
+		uint32_t l_lpcAddr;
+		size_t l_chunkLen;
+
+		l_err = adjustMboxWindow(iv_writeWindow, astMbox::MBOX_C_CREATE_WRITE_WINDOW,
+								 i_addr, i_size, l_lpcAddr, l_chunkLen);
+		if (l_err)
+			break;
+		l_err = writeLpcFw(l_lpcAddr, l_chunkLen, i_data);
+		if (l_err)
+			break;
+		l_err = writeFlush(i_addr, l_chunkLen);
+		if (l_err)
+			break;
+		i_addr += l_chunkLen;
+		i_size -= l_chunkLen;
+		i_data = (char *)i_data + l_chunkLen;
+	}
+
+    if( l_err )
+    {
+        l_err->collectTrace(PNOR_COMP_NAME);
+    }
+
+    return l_err;
+}
+
+/**
+ * @brief Read data from PNOR using Mbox LPC windows
+ */
+errlHndl_t PnorDD::_readFlash( uint32_t i_addr,
+                               size_t i_size,
+                               void* o_data )
+{
+    TRACDCOMP(g_trac_pnor, "PnorDD::_readFlash(i_addr=0x%.8X)> ", i_addr);
+    errlHndl_t l_err = NULL;
+
+	while (i_size) {
+		uint32_t l_lpcAddr;
+		size_t l_chunkLen;
+
+		l_err = adjustMboxWindow(iv_readWindow, astMbox::MBOX_C_CREATE_READ_WINDOW,
+								 i_addr, i_size, l_lpcAddr, l_chunkLen);
+		if (l_err)
+			break;
+		l_err = readLpcFw(l_lpcAddr, l_chunkLen, o_data);
+		if (l_err)
+			break;
+		i_addr += l_chunkLen;
+		i_size -= l_chunkLen;
+		o_data = (char *)o_data + l_chunkLen;
+	}
+    if( l_err )
+    {
+        l_err->collectTrace(PNOR_COMP_NAME);
+    }
+
+    return l_err;
+}
+
+/**
+ * @brief Retrieve bitstring of NOR workarounds
+ */
+uint32_t PnorDD::getNorWorkarounds( void )
+{
+    /* Get rid of this ? */
+    return 0;
+}
+
+/**
+ * @brief Retrieve size of NOR flash
+ */
+uint32_t PnorDD::getNorSize( void )
+{
+	return iv_flashSize;
 }
 
 /**
@@ -424,7 +520,7 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 	iv_readWindow.open = false;
 	iv_writeWindow.open = false;
     do {
-		astMbox::mboxMessage mbInfoMsg(MBOX_C_GET_MBOX_INFO);
+		astMbox::mboxMessage mbInfoMsg(astMbox::MBOX_C_GET_MBOX_INFO);
 		mbInfoMsg.put8(0, 1);
 		l_err = iv_mbox->doMessage(mbInfoMsg);
 		if (l_err) {
@@ -437,7 +533,7 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 		TRACFCOMP( g_trac_pnor, "mboxPnor: blockShift=%d, rdWinSize=0x%08x, wrWinSize=0x%08x",
 				   iv_blockShift, iv_readWindow.size, iv_writeWindow.size);
 
-		astMbox::mboxMessage flInfoMsg(MBOX_C_GET_FLASH_INFO);
+		astMbox::mboxMessage flInfoMsg(astMbox::MBOX_C_GET_FLASH_INFO);
 		l_err = iv_mbox->doMessage(flInfoMsg);
 		if (l_err) {
 			TRACFCOMP( g_trac_pnor, "Error getting flash info :: RC=%.4X", ERRL_GETRC_SAFE(l_err) );
@@ -466,74 +562,3 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 PnorDD::~PnorDD()
 {
 }
-
-/**
- * @brief Calls the SFC to perform a PNOR Write Operation
- */
-errlHndl_t PnorDD::_writeFlash( uint32_t i_addr,
-                                size_t i_size,
-                                const void* i_data )
-{
-    TRACDCOMP(g_trac_pnor, ENTER_MRK"PnorDD::_writeFlash(i_addr=0x%.8X)> ", i_addr);
-    errlHndl_t l_err = NULL;
-
-    // XXX
-
-    if( l_err )
-    {
-        l_err->collectTrace(PNOR_COMP_NAME);
-    }
-
-    return l_err;
-}
-
-/**
- * @brief Calls the SFC to perform a PNOR Read Operation
- */
-errlHndl_t PnorDD::_readFlash( uint32_t i_addr,
-                               size_t i_size,
-                               void* o_data )
-{
-    TRACDCOMP(g_trac_pnor, "PnorDD::_readFlash(i_addr=0x%.8X)> ", i_addr);
-    errlHndl_t l_err = NULL;
-
-	while (i_size) {
-		uint32_t l_lpcAddr;
-		size_t l_chunkLen;
-
-		l_err = adjustMboxWindow(iv_readWindow, MBOX_C_CREATE_READ_WINDOW,
-								 i_addr, i_size, l_lpcAddr, l_chunkLen);
-		if (l_err)
-			break;
-		l_err = readLpcFw(l_lpcAddr, l_chunkLen, o_data);
-		if (l_err)
-			break;
-		i_addr += l_chunkLen;
-		i_size -= l_chunkLen;
-		o_data = (char *)o_data + l_chunkLen;
-	}
-    if( l_err )
-    {
-        l_err->collectTrace(PNOR_COMP_NAME);
-    }
-
-    return l_err;
-}
-
-/**
- * @brief Retrieve bitstring of NOR workarounds
- */
-uint32_t PnorDD::getNorWorkarounds( void )
-{
-    /* Get rid of this ? */
-    return 0;
-}
-
-/**
- * @brief Retrieve size of NOR flash
- */
-uint32_t PnorDD::getNorSize( void )
-{
-	return iv_flashSize;
-}
-
