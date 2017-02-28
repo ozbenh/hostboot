@@ -93,10 +93,13 @@ errlHndl_t lpcRead(DeviceFW::OperationType i_opType,
     uint64_t l_addr = va_arg(i_args,uint64_t);
     errlHndl_t l_err = NULL;
 
-    // Only able to do 1,2,4 byte LPC operations
+	/* For speed, we support larger ops on reads when using mbox */
+#ifndef CONFIG_PNORDD_IS_MBOX
+	// Only able to do 1,2,4 byte LPC operations
     assert( (io_buflen == sizeof(uint8_t)) ||
             (io_buflen == sizeof(uint16_t)) ||
             (io_buflen == sizeof(uint32_t)) );
+#endif
 
     // if the request is for something besides the master sentinel
     //  then we have to use our special side copy of the driver
@@ -731,8 +734,13 @@ errlHndl_t LpcDD::_readLPC(LPC::TransType i_type,
 #if CONFIG_SFC_IS_AST2400 || CONFIG_SFC_IS_AST2500
         if( io_buflen <= sizeof(uint32_t) )
         {
+		#error foo
             memcpy( o_buffer, reinterpret_cast<void*>(l_addr), io_buflen );
         }
+#elif defined(CONFIG_PNORDD_IS_MBOX)
+	if (1) {
+            memcpy( o_buffer, reinterpret_cast<void*>(l_addr), io_buflen );
+	}
 #else
         // Copy data out to caller's buffer.
         if( io_buflen == sizeof(uint8_t) )

@@ -163,8 +163,8 @@ class PnorDD
 								uint32_t &o_lpcAddr, size_t &o_chunkLen);
 	errlHndl_t writeFlush(uint32_t i_addr, size_t i_size);
 
-	errlHndl_t readLpcFw(uint32_t i_offset, uint32_t i_size, void *o_buf);
-	errlHndl_t writeLpcFw(uint32_t i_offset, uint32_t i_size, const void *i_buf);
+	errlHndl_t readLpcFw(uint32_t i_offset, size_t i_size, void *o_buf);
+	errlHndl_t writeLpcFw(uint32_t i_offset, size_t i_size, const void *i_buf);
 
 private: // Variables
 

@@ -274,12 +274,13 @@ mutex_t PnorDD::cv_mutex = MUTEX_INITIALIZER;
 /**
  * LPC FW space accessors
  */
-errlHndl_t PnorDD::readLpcFw(uint32_t i_offset, uint32_t i_size, void *o_buf)
+errlHndl_t PnorDD::readLpcFw(uint32_t i_offset, size_t i_size, void *o_buf)
 {
     errlHndl_t l_err = NULL;
 
     TRACDCOMP( g_trac_pnor, ENTER_MRK"astMboxDD::readLpcFw i_offset=0x%.8x, i_size=0x%.8x",  i_offset, i_size );
 
+#if 0
     do {
         uint32_t* word_ptr = static_cast<uint32_t*>(o_buf);
         uint32_t count = (ALIGN_4(i_size))/4;
@@ -288,19 +289,22 @@ errlHndl_t PnorDD::readLpcFw(uint32_t i_offset, uint32_t i_size, void *o_buf)
             uint32_t l_lpcAddr = i_offset + i*4;
 			size_t l_size = 4;
 
-			/* XXX Add way to do a bulk in one call to the LPC driver */
             l_err = deviceOp(DeviceFW::READ, iv_target, word_ptr+i, l_size,
 							 DEVICE_LPC_ADDRESS(LPC::TRANS_FW, l_lpcAddr));
             if( l_err ) {  break; }
         }
         if( l_err ) { break; }
     } while(0);
+#else
+	l_err = deviceOp(DeviceFW::READ, iv_target, o_buf, i_size,
+					 DEVICE_LPC_ADDRESS(LPC::TRANS_FW, i_offset));
+#endif
 
     TRACDCOMP( g_trac_pnor, EXIT_MRK"astMboxDD::readLpcFw> err=%.8X", ERRL_GETEID_SAFE(l_err) );
     return l_err;
 }
 
-errlHndl_t PnorDD::writeLpcFw(uint32_t i_offset, uint32_t i_size, const void *i_buf)
+errlHndl_t PnorDD::writeLpcFw(uint32_t i_offset, size_t i_size, const void *i_buf)
 {
     errlHndl_t l_err = NULL;
 
@@ -542,7 +546,7 @@ PnorDD::PnorDD( TARGETING::Target* i_target )
 		iv_flashSize = flInfoMsg.get32(0);
 		iv_flashEraseSize = flInfoMsg.get32(4);
 		TRACFCOMP( g_trac_pnor, "mboxPnor: flashSize=0x%08x, eraseSize=0x%08x",
-				   ERRL_GETRC_SAFE(l_err), iv_blockShift, iv_flashSize, iv_flashEraseSize);
+				   iv_blockShift, iv_flashSize, iv_flashEraseSize);
     } while(0);
 
     if( l_err )
