@@ -260,7 +260,7 @@ void IpmiDD::pollCtrl(void)
         }
         mutex_unlock(&iv_mutex);
 
-        nanosleep(0, WAIT_TIME);
+        nanosleep(0, WAIT_TIME / 10);
     }
     IPMI_TRAC(EXIT_MRK "poll_control_register" );
 }
