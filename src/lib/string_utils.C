@@ -64,11 +64,17 @@ extern "C" void *memcpy(void *vdest, const void *vsrc, size_t len)
     long *ldest = reinterpret_cast<long *>(vdest);
     const long *lsrc = reinterpret_cast<const long *>(vsrc);
 
-    while (len >= sizeof(long))
-    {
-        *ldest++ = *lsrc++;
-        len -= sizeof(long);
-    }
+	// Only do the fast path if aligned. This can be used for mmio
+	// which will trap if we are unaligned
+    if (((reinterpret_cast<uint64_t>(vdest) |
+		  reinterpret_cast<uint64_t>(vsrc)) & 7) == 0)
+	{
+		while (len >= sizeof(long))
+		{
+			*ldest++ = *lsrc++;
+			len -= sizeof(long);
+		}
+	}
 
     // Loop, copying 1 byte every 4 instructions
     char *cdest = reinterpret_cast<char *>(ldest);
