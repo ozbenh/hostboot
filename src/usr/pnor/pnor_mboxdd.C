@@ -366,14 +366,21 @@ errlHndl_t PnorDD::adjustMboxWindow(bool i_isWrite, uint32_t i_reqAddr,
 
 errlHndl_t PnorDD::writeDirty(uint32_t i_addr, size_t i_size)
 {
+	/* To pass a correct "size" for both protocol versions, we
+	 * calculate the block-aligned start and end.
+	 */
+	uint32_t l_blockMask = (1u << iv_blockShift) - 1;
+	uint32_t l_start     = i_addr & ~l_blockMask;
+	uint32_t l_end       = ((i_addr + i_size) + l_blockMask) & ~l_blockMask;
+
 	astMbox::mboxMessage dirtyMsg(astMbox::MBOX_C_MARK_WRITE_DIRTY);
 
 	if (iv_protocolVersion == 1) {
 		dirtyMsg.put16(0, i_addr >> iv_blockShift);
-		dirtyMsg.put32(2, i_size);
+		dirtyMsg.put32(2, l_end - l_start);
 	} else {
 		dirtyMsg.put16(0, (i_addr - iv_curWindowOffset) >> iv_blockShift);
-		dirtyMsg.put16(2, i_size >> iv_blockShift);
+		dirtyMsg.put16(2, (l_end - l_start)  >> iv_blockShift);
 	}
 	return iv_mbox->doMessage(dirtyMsg);
 }
